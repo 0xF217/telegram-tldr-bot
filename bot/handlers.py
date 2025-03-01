@@ -1,8 +1,9 @@
 """Telegram bot command handlers."""
+from functools import wraps
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
-from config.settings import WAITING_FOR_CHAT_ID, logger
+from config.settings import WAITING_FOR_CHAT_ID, logger, OWNER_ID
 from utils.telethon_client import get_recent_chats, get_chat_messages, is_telethon_initialized, ensure_telethon_client
 from utils.summarizer import summarize_chat, openrouter_client
 from utils.scheduler import (
@@ -15,6 +16,16 @@ from utils.scheduler import (
 from datetime import datetime
 import time
 import re
+
+def owner_only(func):
+    """Decorator to restrict command access to bot owner only."""
+    @wraps(func)
+    async def wrapped(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        if update.effective_user.id != OWNER_ID:
+            await update.message.reply_text("⛔ Sorry, this bot is private and can only be used by its owner.")
+            return ConversationHandler.END if func.__name__ == "start_summarize" else None
+        return await func(update, context, *args, **kwargs)
+    return wrapped
 
 def escape_markdown(text):
     """
@@ -33,6 +44,7 @@ def escape_markdown(text):
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return re.sub(r'([' + re.escape(escape_chars) + r'])', r'\\\1', text)
 
+@owner_only
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a welcome message when the command /start is issued."""
     logger.info(f"User {update.effective_user.id} started the bot")
@@ -48,6 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/help - Show this help message"
     )
 
+@owner_only
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a help message when the command /help is issued."""
     logger.info(f"User {update.effective_user.id} requested help")
@@ -69,12 +82,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/remove_schedule 123456789"
     )
 
+@owner_only
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel and end the conversation."""
     logger.info(f"User {update.effective_user.id} cancelled the operation")
     await update.message.reply_text("Operation cancelled.")
     return ConversationHandler.END
 
+@owner_only
 async def list_recent_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """List the 10 most recent chats."""
     user_id = update.effective_user.id
@@ -118,6 +133,7 @@ async def list_recent_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         logger.error(f"Error processing dialogs: {str(e)}")
         await update.message.reply_text(f"❌ Error: {str(e)}")
 
+@owner_only
 async def start_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the summarize workflow by asking for a chat ID or process the provided ID directly."""
     user_id = update.effective_user.id
@@ -157,6 +173,7 @@ async def start_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
     return WAITING_FOR_CHAT_ID
 
+@owner_only
 async def process_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Process the provided chat ID and summarize the chat."""
     user_id = update.effective_user.id
@@ -222,6 +239,7 @@ async def process_chat_summary(update: Update, context: ContextTypes.DEFAULT_TYP
 
     return ConversationHandler.END
 
+@owner_only
 async def schedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Schedule periodic summarization of a chat."""
     user_id = update.effective_user.id
@@ -302,6 +320,7 @@ async def schedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         await update.message.reply_text("❌ Failed to schedule summarization. Please try again later.")
 
+@owner_only
 async def list_schedules_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """List all active scheduled summarizations."""
     user_id = update.effective_user.id
@@ -368,6 +387,7 @@ async def list_schedules_command(update: Update, context: ContextTypes.DEFAULT_T
     await update.message.reply_text(response, parse_mode='Markdown')
     logger.info(f"User {user_id} listed {len(user_schedules)} scheduled summarizations")
 
+@owner_only
 async def remove_schedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove a scheduled summarization."""
     user_id = update.effective_user.id

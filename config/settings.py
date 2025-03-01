@@ -25,6 +25,15 @@ API_ID = os.getenv('TELEGRAM_API_ID')
 API_HASH = os.getenv('TELEGRAM_API_HASH')
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
+# Bot owner ID (required for access control)
+OWNER_ID = os.getenv('TELEGRAM_OWNER_ID')
+if not OWNER_ID:
+    raise ValueError("TELEGRAM_OWNER_ID environment variable must be set")
+try:
+    OWNER_ID = int(OWNER_ID)
+except ValueError:
+    raise ValueError("TELEGRAM_OWNER_ID must be a valid integer")
+
 # Ensure data directory exists
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
